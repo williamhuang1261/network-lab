@@ -1,0 +1,122 @@
+{
+  "title": "Network Lab",
+  "uid": "network-lab",
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "15s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "OSPF neighbor state (7 = Full)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "frr_ospf_neighbor_state",
+          "legendFormat": "{{instance}} -> {{neighbor}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 7 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "title": "BGP peer state (1 = Established)",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "frr_bgp_peer_state",
+          "legendFormat": "{{instance}} -> {{peer}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "title": "FRR daemon up",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "frr_status_up",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "title": "Interface inbound throughput (ifHCInOctets rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "targets": [
+        {
+          "expr": "rate(ifHCInOctets{ifDescr=~\"eth.*\"}[1m])",
+          "legendFormat": "{{instance}} {{ifDescr}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "title": "Interface outbound throughput (ifHCOutOctets rate)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "targets": [
+        {
+          "expr": "rate(ifHCOutOctets{ifDescr=~\"eth.*\"}[1m])",
+          "legendFormat": "{{instance}} {{ifDescr}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "Bps" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "title": "Interface operational status (1 = up)",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 14 },
+      "targets": [
+        {
+          "expr": "ifOperStatus{ifDescr=~\"eth.*\"}",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: frr
+    static_configs:
+      - targets:
+          - frr-exporter-r1:9342
+          - frr-exporter-r2:9342
+          - frr-exporter-r3:9342
+
+  - job_name: snmp
+    metrics_path: /snmp
+    params:
+      module: [if_mib]
+    static_configs:
+      - targets:
+          - 10.99.0.11:1161
+          - 10.99.0.12:1161
+          - 10.99.0.13:1161
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: snmp-exporter:9116

@@ -1,0 +1,144 @@
+services:
+  r1:
+    build: ./frr/common
+    container_name: r1
+    hostname: r1
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    volumes:
+      - ./frr/r1/frr.conf:/etc/frr/frr.conf
+      - ./frr/r1/daemons:/etc/frr/daemons
+      - ./frr/r1/vtysh.conf:/etc/frr/vtysh.conf
+      - r1-run:/var/run/frr
+    networks:
+      net-r1-r2:
+        ipv4_address: 10.0.12.2
+      net-mgmt:
+        ipv4_address: 10.99.0.11
+
+  r2:
+    build: ./frr/common
+    container_name: r2
+    hostname: r2
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    volumes:
+      - ./frr/r2/frr.conf:/etc/frr/frr.conf
+      - ./frr/r2/daemons:/etc/frr/daemons
+      - ./frr/r2/vtysh.conf:/etc/frr/vtysh.conf
+      - r2-run:/var/run/frr
+    networks:
+      net-r1-r2:
+        ipv4_address: 10.0.12.3
+      net-r2-r3:
+        ipv4_address: 10.0.23.2
+      net-mgmt:
+        ipv4_address: 10.99.0.12
+
+  r3:
+    build: ./frr/common
+    container_name: r3
+    hostname: r3
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+      - SYS_ADMIN
+    volumes:
+      - ./frr/r3/frr.conf:/etc/frr/frr.conf
+      - ./frr/r3/daemons:/etc/frr/daemons
+      - ./frr/r3/vtysh.conf:/etc/frr/vtysh.conf
+      - r3-run:/var/run/frr
+    networks:
+      net-r2-r3:
+        ipv4_address: 10.0.23.3
+      net-mgmt:
+        ipv4_address: 10.99.0.13
+
+  ovs:
+    build: ./ovs
+    container_name: ovs
+    hostname: ovs
+    privileged: true
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+
+  frr-exporter-r1:
+    image: tynany/frr_exporter:latest
+    container_name: frr-exporter-r1
+    volumes:
+      - r1-run:/var/run/frr
+    networks:
+      - net-mgmt
+
+  frr-exporter-r2:
+    image: tynany/frr_exporter:latest
+    container_name: frr-exporter-r2
+    volumes:
+      - r2-run:/var/run/frr
+    networks:
+      - net-mgmt
+
+  frr-exporter-r3:
+    image: tynany/frr_exporter:latest
+    container_name: frr-exporter-r3
+    volumes:
+      - r3-run:/var/run/frr
+    networks:
+      - net-mgmt
+
+  snmp-exporter:
+    image: prom/snmp-exporter:latest
+    container_name: snmp-exporter
+    networks:
+      - net-mgmt
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+    networks:
+      - net-mgmt
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - net-mgmt
+
+networks:
+  net-r1-r2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.12.0/29
+  net-r2-r3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.23.0/29
+  net-mgmt:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.99.0.0/24
+
+volumes:
+  r1-run:
+  r2-run:
+  r3-run:
