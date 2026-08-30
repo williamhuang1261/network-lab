@@ -1,0 +1,33 @@
+# Kubernetes-specific Prometheus config, distinct from monitoring/prometheus.yml.
+# The Docker Compose config scrapes frr-exporter/snmp/relay targets that only
+# exist in the Compose topology; none of that is deployed here (see
+# docs/kubernetes.md for why). This config instead scrapes the three services
+# that ARE deployed to this cluster, on their own self-reported metrics
+# endpoints, so `kubectl apply` produces a monitoring stack that is actually
+# monitoring something real rather than a copy pointed at dead targets.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: network-lab
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets:
+              - localhost:9090
+
+      - job_name: grafana
+        metrics_path: /metrics
+        static_configs:
+          - targets:
+              - grafana:3000
+
+      - job_name: snmp-exporter
+        static_configs:
+          - targets:
+              - snmp-exporter:9116

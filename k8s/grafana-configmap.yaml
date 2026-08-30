@@ -1,0 +1,23 @@
+# Same datasource config as monitoring/grafana/provisioning/datasources/prometheus.yml,
+# unmodified: it just points at a service named "prometheus" on port 9090,
+# which Kubernetes DNS resolves the same way Docker Compose's network alias
+# did. No dashboard is provisioned here (see docs/kubernetes.md) -- the
+# existing monitoring/grafana/dashboards/network-lab.json panels all read
+# FRR/SNMP/relay metrics that only exist in the Docker Compose topology, and
+# shipping it here would render eight empty panels rather than anything a
+# reviewer could verify.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasource
+  namespace: network-lab
+data:
+  prometheus.yml: |
+    apiVersion: 1
+
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true

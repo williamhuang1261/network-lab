@@ -59,6 +59,12 @@ demo). Prometheus: http://localhost:9090.
 docker compose down
 ```
 
+**Also available on Kubernetes:** the monitoring stack (Prometheus, Grafana,
+snmp-exporter) has its own Deployment/Service/ConfigMap manifests in `k8s/`,
+runnable on a real local cluster (`kind create cluster` + `kubectl apply -f
+k8s/`). See `k8s/README.md` to run it and `docs/kubernetes.md` for why the
+routing/relay layer stays on Docker Compose rather than being ported too.
+
 ## Sample output
 
 **OSPF full adjacency (r1 <-> r2):**
@@ -313,3 +319,8 @@ discarded.
 - The decoder only observes traffic through r2, since it runs inside r2's
   own network namespace; it has no visibility into anything on r1's or r3's
   other interfaces that doesn't cross r2.
+- The routers, Open vSwitch and the relay run on Docker Compose only, not
+  Kubernetes — their multi-interface, statically-addressed bridge topology
+  needs Multus CNI, not present in `kind`/Docker Desktop Kubernetes by
+  default; see `docs/kubernetes.md` for the specifics. Only the
+  single-network monitoring stack (`k8s/`) runs on both.
