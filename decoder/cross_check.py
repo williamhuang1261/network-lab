@@ -25,6 +25,30 @@ def run(cmd: list, timeout: int = 20) -> str:
     return result.stdout + result.stderr
 
 
+def parse_decoder_log(decoder_log: str) -> tuple:
+    """Extracts the decoder's own OSPF/BGP conclusions from its log output."""
+    decoder_ospf_full = bool(re.search(r"inferred FULL", decoder_log))
+    decoder_bgp_established = bool(re.search(r"inferred ESTABLISHED", decoder_log))
+    return decoder_ospf_full, decoder_bgp_established
+
+
+def parse_frr_ospf_full(frr_ospf: str) -> bool:
+    """Extracts whether FRR itself reports Full from `show ip ospf neighbor`."""
+    return "Full" in frr_ospf
+
+
+def parse_frr_bgp_established(frr_bgp: str) -> bool:
+    """Extracts whether FRR itself reports Established from `show ip bgp summary`.
+
+    A BGP session in `show ip bgp summary` reports an uptime (`HH:MM:SS`) in
+    the column where a non-established session instead reports a numeric
+    state code (Idle/Connect/Active are printed as plain words, not matched
+    by this pattern) -- established peers also carry `N/A` as their
+    PfxRcd/PfxSnt-adjacent placeholder in this FRR version's output.
+    """
+    return bool(re.search(r"\d+:\d+:\d+\s+\d+\s+\d+\s+N/A", frr_bgp))
+
+
 def main() -> None:
     print("=== restarting decoder for a clean capture window ===")
     run(COMPOSE + ["up", "-d", "decoder"])
@@ -40,8 +64,7 @@ def main() -> None:
     decoder_log = run(COMPOSE + ["logs", "decoder"], timeout=15)
     print(decoder_log)
 
-    decoder_ospf_full = bool(re.search(r"inferred FULL", decoder_log))
-    decoder_bgp_established = bool(re.search(r"inferred ESTABLISHED", decoder_log))
+    decoder_ospf_full, decoder_bgp_established = parse_decoder_log(decoder_log)
 
     print("=== FRR's own reported state ===")
     frr_ospf = run(COMPOSE + ["exec", "-T", "r1", "vtysh", "-c", "show ip ospf neighbor"])
@@ -49,8 +72,8 @@ def main() -> None:
     frr_bgp = run(COMPOSE + ["exec", "-T", "r2", "vtysh", "-c", "show ip bgp summary"])
     print(frr_bgp)
 
-    frr_ospf_full = "Full" in frr_ospf
-    frr_bgp_established = bool(re.search(r"\d+:\d+:\d+\s+\d+\s+\d+\s+N/A", frr_bgp))
+    frr_ospf_full = parse_frr_ospf_full(frr_ospf)
+    frr_bgp_established = parse_frr_bgp_established(frr_bgp)
 
     print("=== verdict ===")
     ospf_agree = decoder_ospf_full == frr_ospf_full

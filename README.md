@@ -65,6 +65,20 @@ runnable on a real local cluster (`kind create cluster` + `kubectl apply -f
 k8s/`). See `k8s/README.md` to run it and `docs/kubernetes.md` for why the
 routing/relay layer stays on Docker Compose rather than being ported too.
 
+**Running the decoder's test suite** (no Docker Compose stack needed):
+
+```
+pip install -r decoder/requirements-dev.txt
+pytest decoder/tests/
+```
+
+18 tests over `decoder/ospf_bgp_decoder.py`'s OSPF/BGP state-inference rules
+(synthetic Scapy packets, no live capture) and `decoder/cross_check.py`'s
+text-parsing functions (real decoder-log lines plus representative FRR
+`vtysh` output). `decoder/cross_check.py`'s end-to-end `main()` still needs
+a running topology and is exercised by actually running it, not by this
+suite -- see `docs/decoder_verification.md`.
+
 ## Sample output
 
 **OSPF full adjacency (r1 <-> r2):**
