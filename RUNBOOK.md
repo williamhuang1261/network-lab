@@ -177,6 +177,36 @@ shows `connected to 10.0.3.3:9500 (attempt N)` followed by frame counts
 climbing again, and `docker compose logs receiver --tail 5` confirms frames
 are actually arriving, not just that the sender believes it reconnected.
 
+## Running the fault-injection and decoder tools
+
+These aren't failure scenarios to react to -- they're diagnostic tools this
+lab ships, run deliberately:
+
+**Measuring real OSPF reconvergence:**
+
+```
+bash faults/netem_test.sh
+```
+
+Injects 100ms latency, 20% loss, and a full link failure onto r1's link to
+r2, in that order, reporting the real measured effect of each (see
+`docs/reconvergence.md`). Takes about 2-3 minutes end to end. Safe to run
+against a healthy stack; it cleans up its own `tc qdisc` rules.
+
+**Cross-checking the independent decoder against FRR:**
+
+```
+docker compose up -d decoder
+python3 decoder/cross_check.py
+```
+
+Triggers a fresh OSPF/BGP handshake and compares the decoder's from-the-wire
+conclusion against `vtysh`'s own reported state (see
+`docs/decoder_verification.md`). If this ever reports DISAGREE, that is a
+genuinely interesting result worth investigating, not a bug to silence --
+either the decoder's inference logic has a real gap, or FRR's own reporting
+and its wire behavior have diverged, and either one is worth knowing.
+
 ## General diagnostics
 
 - `docker compose ps` — confirm every service is `Up`, not restarting.

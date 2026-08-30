@@ -92,6 +92,25 @@ services:
       net-mgmt:
         ipv4_address: 10.99.0.22
 
+  decoder:
+    build: ./decoder
+    container_name: decoder
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # Shares r2's network namespace rather than sitting on the bridge as a
+    # third container: a Linux bridge switches unicast traffic (BGP over
+    # TCP/179) directly between the two ports involved, the same as a real
+    # switch, and does not flood it to a third, merely-promiscuous port.
+    # OSPF's multicast Hello/LS-Update traffic *is* flooded and would have
+    # been visible from a third port, but BGP would not have been -
+    # sniffing on r2's own interfaces sidesteps the whole question, the
+    # same way a real engineer would tcpdump the router itself.
+    network_mode: "service:r2"
+    depends_on:
+      - r2
+    command: ["ospf_bgp_decoder.py", "90"]
+
   ovs:
     build: ./ovs
     container_name: ovs

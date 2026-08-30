@@ -17,6 +17,11 @@ monitoring.
 - A **TCP data-relay** (`relay/`) streaming real payload data end-to-end
   across the routed topology, with reconnect/retry on a real router outage
   and its own metrics on the same Grafana dashboard.
+- **Fault injection and an independent packet decoder** (`faults/`,
+  `decoder/`): `tc netem` induces real link latency, loss and failure, with
+  measured (not assumed) OSPF reconvergence time; a from-the-wire Scapy
+  decoder infers OSPF/BGP state with no access to FRR's own config or
+  control sockets, cross-checked against `vtysh`'s own reported state.
 
 See [`docs/topology.md`](docs/topology.md) for the full diagram.
 
@@ -123,6 +128,29 @@ $ docker compose start r2   # ~45s later, once OSPF/BGP reconverge:
 [sender] sent 10 frames total (reconnects=0)
 ```
 
+**Measured OSPF reconvergence under a real link failure** (three trials,
+full detail in [`docs/reconvergence.md`](docs/reconvergence.md)):
+
+```
+$ bash faults/netem_test.sh
+link failed at t=0 (container clock epoch ...)
+neighbor dropped 42s after the link failed (dead timer default is 40s)
+restoring the link...
+neighbor reached Full 10s after the link was restored
+```
+
+**An independent packet decoder inferring OSPF/BGP state from raw wire
+captures alone, agreeing with FRR's own state** (full detail in
+[`docs/decoder_verification.md`](docs/decoder_verification.md)):
+
+```
+$ python3 decoder/cross_check.py
+[decoder] OSPF 10.0.0.1 <-> 10.0.0.2: inferred FULL (2-Way via mutual Hello + LS-Update observed from [...])
+[decoder] BGP 10.0.23.2 <-> 10.0.23.3: inferred ESTABLISHED (OPEN + KEEPALIVE observed from both sides)
+OSPF: decoder says Full=True, FRR says Full=True -> AGREE
+BGP: decoder says Established=True, FRR says Established=True -> AGREE
+```
+
 **Monitoring, all targets healthy:**
 
 ```
@@ -159,6 +187,10 @@ the relay's own frame rate and reconnect count.
   "Engineering notes" below for why).
 - **Python, standard library only** for the TCP relay and its metrics
   server — no dependency to justify beyond what ships with the interpreter.
+- **`tc netem`** for fault injection — already present in the router images
+  via `iproute2`, no extra tooling needed.
+- **Scapy** for the independent packet decoder — genuinely parses OSPF/BGP
+  wire format itself, not a wrapper around FRR's own state.
 
 ## Engineering notes
 
@@ -228,6 +260,32 @@ watchdog restart would also produce) rather than live mid-stream stall
 detection, which this test environment cannot reliably exercise. See
 `RUNBOOK.md` for the exact reproduction.
 
+**A Linux bridge does not flood unicast traffic to a merely-promiscuous
+port.** The independent packet decoder was first built as a fourth container
+sitting on the same bridge networks as the routers, in promiscuous mode. It
+saw OSPF fine (multicast Hello/LS-Update traffic gets flooded to every port
+on a bridge without IGMP snooping) but never saw a single BGP packet, even
+with `tcpdump` directly on the interface. A Docker bridge is a real Linux
+bridge: for known unicast MAC addresses it switches traffic directly between
+the two ports involved, exactly like a physical switch, and promiscuous mode
+on a third port only affects what that port's NIC will accept, not what the
+switch chooses to forward there. The fix was to run the decoder inside `r2`'s
+own network namespace (`network_mode: service:r2`) instead of as a bystander
+on the bridge -- the same way a real engineer would `tcpdump` the router
+itself rather than hope for port mirroring that was never configured.
+
+**The first fault-injection reconvergence measurement was wrong, and the
+wrongness was itself informative.** Polling OSPF neighbor state via repeated
+separate `docker compose exec` calls from the host measured 570s for a
+link-failure detection that should take about 40s (the OSPF dead timer).
+That number was the overhead of spawning a new `docker exec` session on
+every poll under host load, not OSPF's actual behavior. Switching to a
+single exec session that polls internally and timestamps with the
+container's own clock brought the measurement in line with the dead timer
+(35-42s across two of three runs). See `docs/reconvergence.md` for the full
+methodology note and why the third run's 124s outlier was kept rather than
+discarded.
+
 ## What is deliberately not here
 
 - No real hardware, no physical switches or routers, no cabling — this is a
@@ -248,3 +306,10 @@ detection, which this test environment cannot reliably exercise. See
 - The relay's reconnect logic is verified against a fresh connection attempt
   during an outage, not against a live connection detecting a mid-stream
   stall in this specific test environment (see "Engineering notes").
+- The independent decoder's OSPF "Full" criterion (2-Way plus an LS-Update
+  from either side) is deliberately weaker than RFC 2328's exact state
+  machine, and the decoder's own docstring says so — it does not track LSA
+  sequence numbers or replicate FRR's neighbor FSM bit-for-bit.
+- The decoder only observes traffic through r2, since it runs inside r2's
+  own network namespace; it has no visibility into anything on r1's or r3's
+  other interfaces that doesn't cross r2.
