@@ -7,6 +7,8 @@ services:
       - NET_ADMIN
       - NET_RAW
       - SYS_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     volumes:
       - ./frr/r1/frr.conf:/etc/frr/frr.conf
       - ./frr/r1/daemons:/etc/frr/daemons
@@ -15,6 +17,8 @@ services:
     networks:
       net-r1-r2:
         ipv4_address: 10.0.12.2
+      net-client:
+        ipv4_address: 10.0.1.2
       net-mgmt:
         ipv4_address: 10.99.0.11
 
@@ -26,6 +30,8 @@ services:
       - NET_ADMIN
       - NET_RAW
       - SYS_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     volumes:
       - ./frr/r2/frr.conf:/etc/frr/frr.conf
       - ./frr/r2/daemons:/etc/frr/daemons
@@ -47,6 +53,8 @@ services:
       - NET_ADMIN
       - NET_RAW
       - SYS_ADMIN
+    sysctls:
+      - net.ipv4.ip_forward=1
     volumes:
       - ./frr/r3/frr.conf:/etc/frr/frr.conf
       - ./frr/r3/daemons:/etc/frr/daemons
@@ -55,8 +63,34 @@ services:
     networks:
       net-r2-r3:
         ipv4_address: 10.0.23.3
+      net-server:
+        ipv4_address: 10.0.3.2
       net-mgmt:
         ipv4_address: 10.99.0.13
+
+  sender:
+    build: ./relay
+    container_name: sender
+    cap_add:
+      - NET_ADMIN
+    command: ["sh", "-c", "ip route add 10.0.3.0/29 via 10.0.1.2 && python sender.py"]
+    networks:
+      net-client:
+        ipv4_address: 10.0.1.3
+      net-mgmt:
+        ipv4_address: 10.99.0.21
+
+  receiver:
+    build: ./relay
+    container_name: receiver
+    cap_add:
+      - NET_ADMIN
+    command: ["sh", "-c", "ip route add 10.0.1.0/29 via 10.0.3.2 && python receiver.py"]
+    networks:
+      net-server:
+        ipv4_address: 10.0.3.3
+      net-mgmt:
+        ipv4_address: 10.99.0.22
 
   ovs:
     build: ./ovs
@@ -132,6 +166,16 @@ networks:
     ipam:
       config:
         - subnet: 10.0.23.0/29
+  net-client:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.1.0/29
+  net-server:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.0.3.0/29
   net-mgmt:
     driver: bridge
     ipam:

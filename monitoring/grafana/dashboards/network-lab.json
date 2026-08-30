@@ -117,6 +117,39 @@
           "instant": true
         }
       ]
+    },
+    {
+      "id": 7,
+      "title": "Relay frame rate (sent vs. received)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 22 },
+      "targets": [
+        {
+          "expr": "rate(relay_frames_sent_total[1m])",
+          "legendFormat": "sent"
+        },
+        {
+          "expr": "rate(relay_frames_received_total[1m])",
+          "legendFormat": "received"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "title": "Relay health: reconnects and last-frame age",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 22 },
+      "targets": [
+        {
+          "expr": "relay_reconnect_count",
+          "legendFormat": "reconnects"
+        },
+        {
+          "expr": "time() - relay_last_frame_timestamp_seconds",
+          "legendFormat": "seconds since last frame"
+        }
+      ]
     }
   ]
 }
