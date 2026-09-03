@@ -22,6 +22,11 @@ monitoring.
   measured (not assumed) OSPF reconvergence time; a from-the-wire Scapy
   decoder infers OSPF/BGP state with no access to FRR's own config or
   control sockets, cross-checked against `vtysh`'s own reported state.
+- An **RDMA lab** (`rdma/`): a software RoCE (`rxe`) device pair bound
+  across two Linux network namespaces, plus real measured RDMA write/read
+  bandwidth and latency benchmarks (`ib_write_bw`/`ib_read_bw`/
+  `ib_write_lat`) over `rdma-core`'s `perftest` tools. Runs inside a Lima
+  VM, not Docker Compose -- see [`docs/rdma.md`](docs/rdma.md) for why.
 
 See [`docs/topology.md`](docs/topology.md) for the full diagram.
 
@@ -78,6 +83,16 @@ text-parsing functions (real decoder-log lines plus representative FRR
 `vtysh` output). `decoder/cross_check.py`'s end-to-end `main()` still needs
 a running topology and is exercised by actually running it, not by this
 suite -- see `docs/decoder_verification.md`.
+
+**Running the RDMA lab** (needs a real Linux kernel with kernel-module
+support -- not Docker Desktop, see `docs/rdma.md`):
+
+```
+limactl shell default -- bash rdma/setup.sh    # rxe0/rxe1 device pair
+limactl shell default -- bash rdma/bench.sh    # write/read bandwidth + latency
+```
+
+Real measured numbers are in `docs/rdma-results.md`.
 
 ## Sample output
 
@@ -338,3 +353,10 @@ discarded.
   needs Multus CNI, not present in `kind`/Docker Desktop Kubernetes by
   default; see `docs/kubernetes.md` for the specifics. Only the
   single-network monitoring stack (`k8s/`) runs on both.
+- The RDMA lab runs inside a Lima VM, not Docker Compose — Docker Desktop's
+  LinuxKit VM has no loadable kernel-module support. The measured
+  bandwidth/latency numbers come from a single `rxe` device looped back to
+  itself, not from `setup.sh`'s two-namespace `rxe0`/`rxe1` pair — RDMA
+  data-plane traffic doesn't survive that veth/netns boundary in this VM's
+  kernel, even though plain ICMP does; see `docs/rdma.md` for the full
+  investigation.
