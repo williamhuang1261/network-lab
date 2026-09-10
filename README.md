@@ -27,6 +27,13 @@ monitoring.
   bandwidth and latency benchmarks (`ib_write_bw`/`ib_read_bw`/
   `ib_write_lat`) over `rdma-core`'s `perftest` tools. Runs inside a Lima
   VM, not Docker Compose -- see [`docs/rdma.md`](docs/rdma.md) for why.
+- **Terraform + ArgoCD** (`terraform/`): Terraform provisions the
+  `network-lab`/`argocd` namespaces and installs ArgoCD on the same `kind`
+  cluster `k8s/`'s manifests already run on, then registers those manifests
+  as an ArgoCD `Application`. From there ArgoCD, not `kubectl apply`, keeps
+  the live monitoring stack in sync with this repo -- see
+  [`docs/gitops.md`](docs/gitops.md) for the ownership split and a real
+  edit-commit-push-sync round trip.
 
 See [`docs/topology.md`](docs/topology.md) for the full diagram.
 
@@ -65,10 +72,25 @@ docker compose down
 ```
 
 **Also available on Kubernetes:** the monitoring stack (Prometheus, Grafana,
-snmp-exporter) has its own Deployment/Service/ConfigMap manifests in `k8s/`,
-runnable on a real local cluster (`kind create cluster` + `kubectl apply -f
-k8s/`). See `k8s/README.md` to run it and `docs/kubernetes.md` for why the
-routing/relay layer stays on Docker Compose rather than being ported too.
+snmp-exporter) has its own Deployment/Service/ConfigMap manifests in `k8s/`.
+Two ways to run them on a real local cluster:
+
+- Manual: `kind create cluster` + `kubectl apply -f k8s/` -- see
+  `k8s/README.md`.
+- Terraform + ArgoCD (the way the cluster is actually operated now):
+  ```
+  kind create cluster --name network-lab
+  cd terraform && terraform init && terraform apply
+  ```
+  Terraform provisions the namespaces and ArgoCD itself, then registers
+  `k8s/` as an ArgoCD `Application` with automated sync -- ArgoCD applies
+  and reconciles the manifests from there, not `terraform apply` or manual
+  `kubectl apply`. See [`docs/gitops.md`](docs/gitops.md) for the full
+  ownership split, the CRD-ordering constraint that forces a two-pass
+  apply, and a real edit-commit-push-sync round trip.
+
+See `docs/kubernetes.md` for why the routing/relay layer stays on Docker
+Compose rather than being ported too.
 
 **Running the decoder's test suite** (no Docker Compose stack needed):
 
