@@ -26,6 +26,13 @@ spec:
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
           ports:
             - containerPort: 6818
           volumeMounts:
