@@ -1,0 +1,42 @@
+# Same slurm.conf/gres.conf shipped to the controller and compute
+# containers under slurm/config/ -- kept as a literal copy here rather than
+# a build-time COPY so ArgoCD can sync config changes without a new image.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: slurm-config
+  namespace: network-lab
+data:
+  slurm.conf: |
+    ClusterName=network-lab
+    SlurmctldHost=slurmctld
+    AuthType=auth/munge
+    CredType=cred/munge
+    MpiDefault=none
+    ProctrackType=proctrack/linuxproc
+    TaskPlugin=task/none
+    ReturnToService=1
+    SlurmctldPidFile=/var/run/slurm/slurmctld.pid
+    SlurmdPidFile=/var/run/slurm/slurmd.pid
+    SlurmdSpoolDir=/var/spool/slurmd
+    SlurmUser=slurm
+    StateSaveLocation=/var/spool/slurmctld
+    SwitchType=switch/none
+    SlurmctldDebug=info
+    SlurmdDebug=info
+    GresTypes=gpu
+    SchedulerType=sched/backfill
+    SelectType=select/cons_tres
+    SelectTypeParameters=CR_Core
+    AccountingStorageType=accounting_storage/slurmdbd
+    AccountingStorageHost=slurmctld
+    AccountingStoragePort=6819
+    AccountingStorageTRES=gres/gpu
+    NodeName=slurmd-compute NodeAddr=slurmd-compute CPUs=2 RealMemory=900 Gres=gpu:2 State=UNKNOWN
+    PartitionName=gpu Nodes=slurmd-compute Default=YES MaxTime=INFINITE State=UP
+  gres.conf: |
+    # SIMULATED GPUs -- see docs/slurm.md. /dev/fakegpu0 and /dev/fakegpu1
+    # are copies of /dev/null created by the compute pod's entrypoint only
+    # to satisfy the gres/gpu plugin's File= requirement. No GPU driver,
+    # no CUDA, no nvidia-smi visibility.
+    NodeName=slurmd-compute Name=gpu File=/dev/fakegpu[0-1]

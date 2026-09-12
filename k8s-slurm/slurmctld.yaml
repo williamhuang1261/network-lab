@@ -1,0 +1,63 @@
+# slurmctld + slurmdbd, same combined-container image as the local
+# docker-compose demo (slurm/docker/controller.Dockerfile). The munge key
+# is mounted from a Secret created by scripts/deploy-k8s-slurm.sh at
+# /munge-shared/munge.key -- never committed to git, see docs/slurm.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slurmctld
+  namespace: network-lab
+  labels:
+    app: slurmctld
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slurmctld
+  template:
+    metadata:
+      labels:
+        app: slurmctld
+    spec:
+      hostname: slurmctld
+      containers:
+        - name: slurmctld
+          image: network-lab-slurmctld:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 6817
+            - containerPort: 6819
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm/slurm.conf
+              subPath: slurm.conf
+            - name: slurm-config
+              mountPath: /etc/slurm/gres.conf
+              subPath: gres.conf
+            - name: munge-key
+              mountPath: /munge-shared
+              readOnly: true
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: slurm-config
+        - name: munge-key
+          secret:
+            secretName: slurm-munge-key
+            defaultMode: 0400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slurmctld
+  namespace: network-lab
+spec:
+  selector:
+    app: slurmctld
+  ports:
+    - name: slurmctld
+      port: 6817
+      targetPort: 6817
+    - name: slurmdbd
+      port: 6819
+      targetPort: 6819

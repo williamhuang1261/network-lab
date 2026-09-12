@@ -1,0 +1,60 @@
+# Compute node running slurmd, advertising a simulated GPU count via
+# gres.conf (see docs/slurm.md). privileged:true mirrors the local
+# docker-compose demo's requirement for slurmd's process-tracking; there is
+# no GPU device passthrough here, simulated or otherwise.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slurmd-compute
+  namespace: network-lab
+  labels:
+    app: slurmd-compute
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: slurmd-compute
+  template:
+    metadata:
+      labels:
+        app: slurmd-compute
+    spec:
+      hostname: slurmd-compute
+      containers:
+        - name: slurmd
+          image: network-lab-slurmd-compute:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+          ports:
+            - containerPort: 6818
+          volumeMounts:
+            - name: slurm-config
+              mountPath: /etc/slurm/slurm.conf
+              subPath: slurm.conf
+            - name: slurm-config
+              mountPath: /etc/slurm/gres.conf
+              subPath: gres.conf
+            - name: munge-key
+              mountPath: /munge-shared
+              readOnly: true
+      volumes:
+        - name: slurm-config
+          configMap:
+            name: slurm-config
+        - name: munge-key
+          secret:
+            secretName: slurm-munge-key
+            defaultMode: 0400
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: slurmd-compute
+  namespace: network-lab
+spec:
+  selector:
+    app: slurmd-compute
+  ports:
+    - port: 6818
+      targetPort: 6818

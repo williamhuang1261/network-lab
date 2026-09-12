@@ -1,0 +1,57 @@
+# Ephemeral MariaDB backing slurmdbd's accounting storage. State is not
+# persisted across pod restarts (emptyDir) -- acceptable for this demo;
+# see docs/slurm.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mariadb
+  namespace: network-lab
+  labels:
+    app: mariadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mariadb
+  template:
+    metadata:
+      labels:
+        app: mariadb
+    spec:
+      containers:
+        - name: mariadb
+          image: mariadb:11
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              value: root-demo-password
+            - name: MYSQL_DATABASE
+              value: slurm_acct_db
+            - name: MYSQL_USER
+              value: slurm
+            - name: MYSQL_PASSWORD
+              value: slurm-demo-password
+          ports:
+            - containerPort: 3306
+          readinessProbe:
+            exec:
+              command: ["healthcheck.sh", "--connect", "--innodb_initialized"]
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/mysql
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mariadb
+  namespace: network-lab
+spec:
+  selector:
+    app: mariadb
+  ports:
+    - port: 3306
+      targetPort: 3306
