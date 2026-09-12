@@ -1,0 +1,57 @@
+# Standalone Slurm demo stack: a real slurmctld/slurmdbd/slurmd/munge
+# cluster with one compute node advertising a simulated GPU resource.
+# Run independently of the main docker-compose.yml (different subsystem):
+#   docker compose -f slurm/docker-compose.slurm.yml up --build
+#
+# See docs/slurm.md for the simulated-GPU disclosure and the design notes
+# behind combining slurmctld+slurmdbd into one container.
+services:
+  keygen:
+    image: ubuntu:22.04
+    volumes:
+      - munge-shared:/munge-shared
+      - ./scripts/keygen.sh:/keygen.sh:ro
+    entrypoint: ["/bin/sh", "/keygen.sh"]
+
+  mariadb:
+    image: mariadb:11
+    environment:
+      MYSQL_ROOT_PASSWORD: root-demo-password
+      MYSQL_DATABASE: slurm_acct_db
+      MYSQL_USER: slurm
+      MYSQL_PASSWORD: slurm-demo-password
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  slurmctld:
+    build:
+      context: .
+      dockerfile: docker/controller.Dockerfile
+    hostname: slurmctld
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      mariadb:
+        condition: service_healthy
+    volumes:
+      - munge-shared:/munge-shared:ro
+
+  slurmd-compute:
+    build:
+      context: .
+      dockerfile: docker/compute.Dockerfile
+    hostname: slurmd-compute
+    depends_on:
+      keygen:
+        condition: service_completed_successfully
+      slurmctld:
+        condition: service_started
+    privileged: true
+    volumes:
+      - munge-shared:/munge-shared:ro
+
+volumes:
+  munge-shared:
