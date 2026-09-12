@@ -35,6 +35,15 @@ monitoring.
   [`docs/gitops.md`](docs/gitops.md) for the ownership split and a real
   edit-commit-push-sync round trip.
 
+- **Slurm** (`slurm/`, `k8s-slurm/`): a real `slurmctld`/`slurmdbd`/`slurmd`
+  cluster (not a mock scheduler) with one compute node advertising a
+  simulated GPU resource, runnable both as a standalone Docker Compose stack
+  and on the same `kind` cluster the monitoring stack runs on, registered as
+  a second ArgoCD `Application` (`terraform/application-slurm.tf`). GRES-aware
+  queueing (`squeue`) and accounting (`sacct`) are verified against real
+  multi-job submissions -- see [`docs/slurm.md`](docs/slurm.md) for the
+  simulated-GPU disclosure.
+
 See [`docs/topology.md`](docs/topology.md) for the full diagram.
 
 ## Why
@@ -115,6 +124,29 @@ limactl shell default -- bash rdma/bench.sh    # write/read bandwidth + latency
 ```
 
 Real measured numbers are in `docs/rdma-results.md`.
+
+**Running the Slurm simulated-GPU demo** -- standalone, no Kubernetes needed:
+
+```
+docker compose -f slurm/docker-compose.slurm.yml up --build -d
+# wait for the compute node to report idle (see docs/slurm.md re: startup time)
+docker exec slurm-slurmctld-1 sinfo
+docker cp slurm/jobs/gpu_job.sh slurm-slurmctld-1:/tmp/gpu_job.sh
+docker exec -u slurm slurm-slurmctld-1 bash -c \
+  "chown slurm:slurm /tmp/gpu_job.sh; sbatch /tmp/gpu_job.sh; sbatch /tmp/gpu_job.sh; sbatch /tmp/gpu_job.sh"
+docker exec -u slurm slurm-slurmctld-1 squeue
+```
+
+Or on the same `kind` cluster the monitoring stack uses, GitOps-managed via
+the `network-lab-slurm` ArgoCD Application:
+
+```
+bash scripts/deploy-k8s-slurm.sh
+```
+
+Generates a fresh munge key and loads it as a Kubernetes Secret (never
+committed -- see `docs/slurm.md`), builds and loads the controller/compute
+images into `kind`, and applies `k8s-slurm/`.
 
 ## Sample output
 
@@ -227,6 +259,24 @@ neighbor state, BGP peer state, FRR daemon liveness, per-interface throughput
 derived from `ifHCInOctets`/`ifHCOutOctets`, a table of `ifOperStatus`, and
 the relay's own frame rate and reconnect count.
 
+**Slurm GRES-aware queueing** (three jobs against two simulated GPUs; full
+detail and the simulated-GPU disclosure in [`docs/slurm.md`](docs/slurm.md)):
+
+```
+$ squeue
+             JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
+                 3       gpu gpu-demo    slurm PD       0:00      1 (Resources)
+                 1       gpu gpu-demo    slurm  R       0:02      1 slurmd-compute
+                 2       gpu gpu-demo    slurm  R       0:02      1 slurmd-compute
+
+$ sacct -j 1,2,3 --format=JobID,JobName,Partition,AllocTRES%40,State,ExitCode,Elapsed
+JobID           JobName  Partition                                AllocTRES      State ExitCode    Elapsed
+------------ ---------- ---------- ---------------------------------------- ---------- -------- ----------
+1              gpu-demo        gpu        billing=1,cpu=1,gres/gpu=1,node=1  COMPLETED      0:0   00:00:20
+2              gpu-demo        gpu        billing=1,cpu=1,gres/gpu=1,node=1  COMPLETED      0:0   00:00:20
+3              gpu-demo        gpu        billing=1,cpu=1,gres/gpu=1,node=1  COMPLETED      0:0   00:00:20
+```
+
 ## Stack
 
 - **FRRouting** — a real router implementation, not a hand-rolled OSPF/BGP
@@ -248,6 +298,9 @@ the relay's own frame rate and reconnect count.
   via `iproute2`, no extra tooling needed.
 - **Scapy** for the independent packet decoder — genuinely parses OSPF/BGP
   wire format itself, not a wrapper around FRR's own state.
+- **Slurm (`slurm-wlm` 21.08)** — a real workload manager, not a scheduler
+  simulator; GRES-aware queueing and slurmdbd-backed accounting are exercised
+  against genuine `sbatch`/`squeue`/`sacct` calls.
 
 ## Engineering notes
 
@@ -382,3 +435,9 @@ discarded.
   data-plane traffic doesn't survive that veth/netns boundary in this VM's
   kernel, even though plain ICMP does; see `docs/rdma.md` for the full
   investigation.
+- No physical or real GPU anywhere in the Slurm extension — the compute
+  node's `gpu:2` GRES is backed by two `/dev/null` stand-ins, not an actual
+  accelerator, no CUDA runtime or NVIDIA driver is installed, and
+  `CUDA_VISIBLE_DEVICES` is only the GRES index Slurm handed the job, never
+  a real device; see `docs/slurm.md` for the full disclosure and a real
+  slurmctld/slurmd startup-latency finding in this VM.
